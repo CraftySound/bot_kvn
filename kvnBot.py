@@ -182,13 +182,23 @@ async def send_results(update: Update, user_id: int):
         f"⏳ Время прохождения: {elapsed_time:.2f} сек\n\n🏆 ТОП-10 участников:\n{leaderboard_text}")
     await update.effective_message.reply_text(result_text)
 
+async def callback_router(update: Update, context: CallbackContext) -> None:
+    """Распределяет кнопки между тестом и админ-панелью"""
+    query = update.callback_query
+    data = query.data
 
+    # Проверяем, если это кнопки админ-панели
+    if data in ["add_question", "edit_question", "delete_question"]:
+        await admin_callback(update, context)
+    else:
+        await button_handler(update, context)  # Это кнопки теста
+        
 def main():
     """Запуск бота"""
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(callback_router))
     print("✅ Бот запущен...")
     app.run_polling()
 
