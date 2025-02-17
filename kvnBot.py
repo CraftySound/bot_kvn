@@ -15,7 +15,53 @@ questions = [
     {"question": "Кто стал чемпионом Премьер-Лиги КВН в 2016 году?",
      "options": ["Сборная Грузии", "НАТЕ", "Театр Уральского Зрителя", "Физтех", "Саратов"], "correct": 1},
 ]
+# Админ ID (замени на свой Telegram ID)
+ADMIN_ID = 538226846
 
+
+async def admin_panel(update: Update, context: CallbackContext) -> None:
+    """Админ-панель для управления вопросами"""
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ У вас нет прав для доступа к админ-панели.")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("➕ Добавить вопрос", callback_data="add_question")],
+        [InlineKeyboardButton("✏️ Редактировать вопрос", callback_data="edit_question")],
+        [InlineKeyboardButton("🗑 Удалить вопрос", callback_data="delete_question")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("⚙️ Админ-панель:", reply_markup=reply_markup)
+
+
+async def admin_callback(update: Update, context: CallbackContext) -> None:
+    """Обработчик нажатий в админ-панели"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    if user_id != ADMIN_ID:
+        await query.answer("❌ У вас нет прав на это действие.", show_alert=True)
+        return
+
+    action = query.data
+    if action == "add_question":
+        await query.message.reply_text(
+            "✏️ Введите новый вопрос в формате: Вопрос | Ответ1, Ответ2, Ответ3, Ответ4 | Номер правильного ответа (0-3)")
+        context.user_data["admin_action"] = "add"
+    elif action == "edit_question":
+        await query.message.reply_text("📋 Список вопросов:")
+        for i, q in enumerate(questions):
+            await query.message.reply_text(f"{i + 1}. {q['question']}")
+        await query.message.reply_text("✏️ Введите номер вопроса для редактирования:")
+        context.user_data["admin_action"] = "edit"
+    elif action == "delete_question":
+        await query.message.reply_text("📋 Список вопросов:")
+        for i, q in enumerate(questions):
+            await query.message.reply_text(f"{i + 1}. {q['question']}")
+        await query.message.reply_text("🗑 Введите номер вопроса для удаления:")
+        context.user_data["admin_action"] = "delete"
+
+    await query.answer()
 # Храним прогресс, результаты и задачи с таймерами
 user_progress = {}
 user_scores = {}
@@ -141,6 +187,7 @@ def main():
     """Запуск бота"""
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CallbackQueryHandler(button_handler))
     print("✅ Бот запущен...")
     app.run_polling()
