@@ -70,6 +70,7 @@ async def admin_panel(update: Update, context: CallbackContext) -> None:
         [InlineKeyboardButton("➕ Добавить вопрос", callback_data="add_question")],
         [InlineKeyboardButton("✏️ Редактировать вопрос", callback_data="edit_question")],
         [InlineKeyboardButton("🗑 Удалить вопрос", callback_data="delete_question")],
+        [InlineKeyboardButton("🧹 Очистить ТОП-10", callback_data="clear_leaderboard")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("⚙️ Админ-панель:", reply_markup=reply_markup)
@@ -101,6 +102,10 @@ async def admin_callback(update: Update, context: CallbackContext) -> None:
         await query.message.reply_text("🗑 Введите номер вопроса для удаления:")
         context.user_data["admin_action"] = "delete"
 
+    elif action == "clear_leaderboard":
+        leaderboard.clear()
+        await query.message.reply_text("🏆 ТОП-10 успешно очищен!")
+
     await query.answer()
 # Храним прогресс, результаты и задачи с таймерами
 user_progress = {}
@@ -113,11 +118,18 @@ user_attempts = {}
 async def start(update: Update, context: CallbackContext) -> None:
     """Обработчик команды /start"""
     user_id = update.effective_user.id
-    user_username = update.effective_user.username or "Аноним"
+    user_username = update.effective_user.username
+    # Если логин отсутствует, используем Имя и Фамилию
+    if not user_username:
+        user_username = f"{update.effective_user.first_name or ''} {update.effective_user.last_name or ''}".strip()
+    # Если имя и фамилия тоже отсутствуют, ставим "Аноним"
+    user_username = user_username if user_username else "Аноним"
     current_time = time.time()
 
+    EXEMPT_USERS = {538226846}  # Замените на реальные ID пользователей
+
     # Проверяем, проходил ли пользователь тест за последние 24 часа
-    if user_id in user_attempts and current_time - user_attempts[user_id] < 86400:
+    if user_id not in EXEMPT_USERS and user_id in user_attempts and current_time - user_attempts[user_id] < 86400:
         await update.message.reply_text("❌ Вы уже проходили тест сегодня. Попробуйте снова завтра!")
         return
 
@@ -148,25 +160,37 @@ async def answer_timeout(update: Update, context: CallbackContext, user_id: int,
     while time_left > 0:
         await asyncio.sleep(1)
         time_left -= 1
+
+        # Проверяем, ответил ли уже пользователь
+        if user_id not in user_timers:
+            return
+
         try:
             await msg.edit_text(f"⏳ {question_data['question']}\nОсталось: {time_left} сек",
                                 reply_markup=msg.reply_markup)
         except:
-            break
+            break  # Если ошибка, выходим из цикла
 
-    if user_id in user_progress and user_progress[user_id] < len(questions):
-        user_scores[user_id]["incorrect"] += 1
-        try:
-            await msg.delete()
-        except:
-            pass
+    # Если пользователь уже ответил, не отправляем "Время истекло!"
+    if user_id not in user_timers:
+        return
 
-        await update.effective_message.reply_text("⏳ Время на вопрос истекло!")
-        user_progress[user_id] += 1
-        if user_progress[user_id] < len(questions):
-            await send_question(update, context, user_id)
-        else:
-            await send_results(update, user_id)
+    del user_timers[user_id]  # Удаляем таймер из списка активных
+    user_scores[user_id]["incorrect"] += 1
+
+    try:
+        await msg.delete()
+    except:
+        pass
+
+    await update.effective_message.reply_text("⏳ Время на вопрос истекло!")
+    user_progress[user_id] += 1
+
+    if user_progress[user_id] < len(questions):
+        await send_question(update, context, user_id)
+    else:
+        await send_results(update, user_id)
+
 
 
 async def button_handler(update: Update, context: CallbackContext) -> None:
@@ -178,6 +202,7 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
     if index >= len(questions):
         return
 
+    # Отмена таймера, если он есть
     if user_id in user_timers:
         user_timers[user_id].cancel()
         del user_timers[user_id]
@@ -198,14 +223,12 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
 
     user_progress[user_id] += 1
 
-    # Добавляем задержку перед следующим вопросом
     await asyncio.sleep(2)
 
     if user_progress[user_id] < len(questions):
         await send_question(update, context, user_id)
     else:
         await send_results(update, user_id)
-
 
 
 async def send_results(update: Update, user_id: int):
