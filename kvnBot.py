@@ -3,7 +3,7 @@ import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext
 
-TOKEN = "8118913866:AAF07G86rNkFUDFpybZJYhVbu3v74uEqa0k"
+TOKEN = "8118913866:AAEVKeud9EPr36gb_A4g_WSrr9QI7nPSD68"
 
 # Вопросы и ответы
 questions = [
@@ -20,7 +20,7 @@ questions = [
     {"question": "Какая команда имеет самое большое количество выигранных КиВиНов?", "options": ["Максимум", "РУДН", "Русская Дорога", "Уральские Пельмени"],
      "correct": 1},
     {"question": "В каком году Голосящий КиВиН переехал в Светлогорск?", "options": ["2013", "2014", "2015", "2017"],
-     "correct": 3},
+     "correct": 2},
     {"question": "Какая команда подряд выиграла Премьер-Лигу и Высшую лигу КВН?", "options": ["СОК", "Мегаполис", "Максимум", "Так-То"],
      "correct": 1},
     {"question": "Какой город представляла команда КВН Монди?", "options": ["Сыктывкар", "Саратов", "Смоленск", "Алупка"],
@@ -195,12 +195,17 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
 
     await query.answer()
     await query.edit_message_text(text=f"{question_data['question']}\n\n{reply_text}")
+
     user_progress[user_id] += 1
+
+    # Добавляем задержку перед следующим вопросом
+    await asyncio.sleep(2)
 
     if user_progress[user_id] < len(questions):
         await send_question(update, context, user_id)
     else:
         await send_results(update, user_id)
+
 
 
 async def send_results(update: Update, user_id: int):
